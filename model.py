@@ -21,6 +21,8 @@ class Model(object):
         self.create_embedding()
         self.create_passage_encoder()
         self.create_question_encoder()
+        self.create_similarity()
+        self.create_loss()
         self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=2)
         total, vc = self.trainable_parameters()
         print('trainable parameters: {}'.format(total))
@@ -33,11 +35,13 @@ class Model(object):
             self.input_passage = tf.placeholder(tf.int32, shape=[None, None], name='passage')
             self.passage_mask, self.passage_length = func.tensor_to_mask(self.input_passage)
 
-            self.label_question = tf.placeholder(tf.int32, shape=[None, None, None], name='question')
-            self.batch_size = tf.shape(self.label_question)[0]
-            self.max_num_question = tf.shape(self.label_question)[1]
-            self.max_question_len = tf.shape(self.label_question)[2]
-            self.target_question = tf.reshape(self.label_question, shape=[self.batch_size*self.max_num_question, self.max_question_len])
+            self.input_question = tf.placeholder(tf.int32, shape=[None, None, None], name='question')
+            self.input_question_label = tf.placeholder(tf.float32, shape=[None, None], name='question_label')#0 or 1
+            self.batch_size = tf.shape(self.input_question)[0]
+            self.max_num_question = tf.shape(self.input_question)[1]
+            self.max_question_len = tf.shape(self.input_question)[2]
+            self.target_question = tf.reshape(self.input_question, shape=[self.batch_size*self.max_num_question, self.max_question_len])
+            self.target_question_label = tf.reshape(self.input_question_label, shape=[-1])
             self.question_mask, self.question_length = func.tensor_to_mask(self.target_question)
             #self.num_question_mask, self.num_question = func.tensor_to_mask(self.question_length)
             self.input_keep_prob = tf.placeholder(tf.float32, name='keep_prob')
@@ -78,6 +82,20 @@ class Model(object):
             tf.summary.histogram('question_encoder/output', self.question_encoder_output)
             tf.summary.histogram('question_encoder/state', self.question_encoder_state)
 
+
+    def create_similarity(self):
+        with tf.variable_scope('similarity'):
+            tiled_passage = tf.tile(self.passage_encoder_state, [self.max_num_question, 1])
+            self.similarity = tf.reduce_sum(self.question_encoder_state * tiled_passage, -1, name='similarity')
+
+
+    def create_loss(self):
+        with tf.variable_scope('loss'):
+            target_mask = tf.to_float(self.question_length > 0)
+            loss = func.cross_entropy(self.similarity, self.target_question_label, mask=target_mask)
+            self.loss = tf.reduce_sum(loss) / tf.reduce_sum(target_mask)
+            tf.summary.scalar('loss/loss', self.loss)
+            
 
     def trainable_parameters(self):
         total_parameters = 0
