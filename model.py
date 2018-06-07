@@ -100,12 +100,14 @@ class Model(object):
         with tf.variable_scope('similarity'):
             tiled_passage = tf.tile(self.passage_encoder_state, [self.max_num_question, 1])
             self.similarity = tf.reduce_sum(self.question_encoder_state * tiled_passage, -1, name='similarity')
+            self.norm_similarity = tf.sigmoid(self.similarity)
+            #self.similarity = tf.clip_by_value(self.similarity, -20, 20, name='similarity')
 
 
     def create_loss(self):
         with tf.variable_scope('loss'):
             target_mask = tf.to_float(self.question_length > 0)
-            loss = func.cross_entropy(self.similarity, self.target_question_label, mask=target_mask)
+            loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.similarity, labels=self.target_question_label) * target_mask
             self.loss = tf.reduce_sum(loss) / tf.reduce_sum(target_mask)
             tf.summary.scalar('loss/loss', self.loss)
             
@@ -146,7 +148,7 @@ class Model(object):
             for direction in range(2):
                 for ch in range(2):
                     state_list.append(bi_state[direction][layer_id][ch])
-        return tf.nn.l2_normalize(tf.layers.dense(tf.concat(state_list, -1), config.dense_vector_dim), name=name)
+        return tf.layers.dense(tf.concat(state_list, -1), config.dense_vector_dim, name=name)
 
 
     def dense_output(self, bi_output, mask, name='dense_output'):
@@ -154,7 +156,7 @@ class Model(object):
         backward = bi_output[1]
         output = tf.concat([forward, backward], -1) * tf.expand_dims(mask, -1)
         state = tf.reduce_sum(output, 1)
-        return tf.nn.l2_normalize(tf.layers.dense(state, config.dense_vector_dim), name=name)
+        return tf.layers.dense(state, config.dense_vector_dim, name=name)
         
 
     def restore(self, sess):

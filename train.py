@@ -23,7 +23,7 @@ def run_epoch(itr, sess, model, feeder, evaluator, writer):
         summary, global_step, _, loss, similarity = sess.run(
             [
                 model.summary, model.global_step, model.optimizer, model.loss,
-                model.similarity
+                model.norm_similarity
             ], feed_dict=feed)
         writer.add_summary(summary, global_step=global_step)
         pid, qid, sim, lab = pids[0], qids[0], similarity[:len(qids[0])], labels[0]
