@@ -8,16 +8,21 @@ from collections import defaultdict
 stop_words = set(utils.read_all_lines(config.stopwords_file))
 
 def create_vocab(filename):
-    vocab = defaultdict(lambda: 0)
+    word_vocab = defaultdict(lambda: 0)
+    char_vocab = defaultdict(lambda: 0)
     for line in utils.read_all_lines(filename):
         for word in line.split(' '):
-            vocab[word] += 1
-    vocab = sorted(vocab.items(), key=lambda x:-x[1])
-    utils.write_all_lines(config.vocab_file, ['{}:{}'.format(w,c) for w,c in vocab])
+            word_vocab[word] += 1
+            for char in word:
+                char_vocab[char] += 1
+    word_vocab = sorted(word_vocab.items(), key=lambda x:-x[1])
+    char_vocab = sorted(char_vocab.items(), key=lambda x:-x[1])
+    utils.write_all_lines(config.word_vocab_file, ['{}:{}'.format(w,n) for w,n in word_vocab])
+    utils.write_all_lines(config.char_vocab_file, ['{}:{}'.format(w,n) for w,n in char_vocab])
 
 
 def prepare_dataset_with_document(source, target):
-    passages = []
+    lines = []
     for line in utils.read_all_lines(source):
         sample = json.loads(line)
         documents = sample['documents']
@@ -30,10 +35,10 @@ def prepare_dataset_with_document(source, target):
                 common = question_words & passage_words
                 passage = rip_marks(' '.join(passage))
                 if len(common) / len(question_words) > 0.3 and len(passage) > 2 * len(questions[0]):
-                    passages.append(passage)
-                    passages += questions
-                    passages += '<P>'
-    utils.write_all_lines(target, passages)
+                    lines.append(passage)
+                    lines += list(set(questions))
+                    lines.append('<P>')
+    utils.write_all_lines(target, lines)
 
 
 def rip_marks(text):

@@ -11,6 +11,30 @@
             "program": "${file}"
         },
         {
+            "name": "Python: preprocess",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/preprocess.py"
+        },
+        {
+            "name": "Python: model",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/model.py"
+        },
+        {
+            "name": "Python: train",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/train.py"
+        },
+        {
+            "name": "Python: evaluate",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/evaluator.py"
+        },
+        {
             "name": "Python: Attach",
             "type": "python",
             "request": "attach",

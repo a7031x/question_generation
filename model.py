@@ -4,11 +4,13 @@ import rnn_helper as rnn
 import config
 import func
 import utils
+import os
 
 class Model(object):
-    def __init__(self, ckpt_folder=None, name='model'):
+    def __init__(self, vocab_size, ckpt_folder=None, name='model'):
         self.name = name
         self.ckpt_folder = ckpt_folder
+        self.vocab_size = vocab_size
         if self.ckpt_folder is not None:
             utils.mkdir(self.ckpt_folder)
         initializer = tf.random_uniform_initializer(-0.05, 0.05)
@@ -23,11 +25,22 @@ class Model(object):
         self.create_question_encoder()
         self.create_similarity()
         self.create_loss()
+        self.create_optimizer()
         self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=2)
         total, vc = self.trainable_parameters()
         print('trainable parameters: {}'.format(total))
         for name, count in vc.items():
             print('{}: {}'.format(name, count))
+
+
+    def feed(self, passage, question, label, keep_prob):
+        feed_dict = {
+            self.input_passage: passage,
+            self.input_question: question,
+            self.input_question_label: label,
+            self.input_keep_prob: keep_prob
+        }
+        return feed_dict
 
 
     def create_input(self):
@@ -49,7 +62,7 @@ class Model(object):
 
     def create_embedding(self):
         with tf.variable_scope('embedding'):
-            self.embedding = tf.get_variable(name='embedding', shape=[config.vocab_size, config.embedding_dim])
+            self.embedding = tf.get_variable(name='embedding', shape=[self.vocab_size, config.embedding_dim])
             self.passage_embedding = tf.nn.embedding_lookup(self.embedding, self.input_passage, name='passage_embedding')
             self.question_embedding = tf.nn.embedding_lookup(self.embedding, self.target_question, name='question_embedding')
             tf.summary.histogram('embedding/embedding', self.embedding)
@@ -97,6 +110,15 @@ class Model(object):
             tf.summary.scalar('loss/loss', self.loss)
             
 
+    def create_optimizer(self):
+        self.global_step = tf.Variable(0, trainable=False)
+        self.opt = tf.train.AdamOptimizer(learning_rate=1E-3)
+        grads = self.opt.compute_gradients(self.loss)
+        gradients, variables = zip(*grads)
+        capped_grads, _ = tf.clip_by_global_norm(gradients, 5.0)
+        self.optimizer = self.opt.apply_gradients(zip(capped_grads, variables), global_step=self.global_step)
+
+        
     def trainable_parameters(self):
         total_parameters = 0
         vc = {}
@@ -127,5 +149,23 @@ class Model(object):
         return tf.nn.l2_normalize(tf.layers.dense(tf.concat(state_list, -1), config.dense_vector_dim), name=name)
 
 
+    def restore(self, sess):
+        ckpt = tf.train.get_checkpoint_state(self.ckpt_folder)
+        if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
+            with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
+                self.saver.restore(sess, ckpt.model_checkpoint_path)
+                print('MODEL LOADED.')
+        else:
+            sess.run(tf.global_variables_initializer())
+
+
+    def save(self, sess):
+        self.saver.save(sess, os.path.join(self.ckpt_folder, 'model.ckpt'))
+
+
+    def summarize(self, writer):
+        self.summary = tf.summary.merge_all()
+
+
 if __name__ == '__main__':
-    model = Model()
+    model = Model(config.char_vocab_size)
