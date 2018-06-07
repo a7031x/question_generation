@@ -77,7 +77,7 @@ class Model(object):
                 config.num_passage_encoder_layers,
                 config.num_passage_residual_layers)
             self.passage_encoder_output = tf.concat(bi_output, -1, name='output')
-            self.passage_encoder_state = self.dense_state(bi_state)
+            self.passage_encoder_state = self.dense_output(bi_output, self.passage_mask)
             tf.summary.histogram('passage_encoder/output', self.passage_encoder_output)
             tf.summary.histogram('passage_encoder/state', self.passage_encoder_state)
 
@@ -91,7 +91,7 @@ class Model(object):
                 config.num_question_encoder_layers,
                 config.num_question_residual_layers)
             self.question_encoder_output = tf.concat(bi_output, -1, name='output')
-            self.question_encoder_state = self.dense_state(bi_state)
+            self.question_encoder_state = self.dense_output(bi_output, self.question_mask)
             tf.summary.histogram('question_encoder/output', self.question_encoder_output)
             tf.summary.histogram('question_encoder/state', self.question_encoder_state)
 
@@ -118,7 +118,7 @@ class Model(object):
         capped_grads, _ = tf.clip_by_global_norm(gradients, 5.0)
         self.optimizer = self.opt.apply_gradients(zip(capped_grads, variables), global_step=self.global_step)
 
-        
+
     def trainable_parameters(self):
         total_parameters = 0
         vc = {}
@@ -148,6 +148,14 @@ class Model(object):
                     state_list.append(bi_state[direction][layer_id][ch])
         return tf.nn.l2_normalize(tf.layers.dense(tf.concat(state_list, -1), config.dense_vector_dim), name=name)
 
+
+    def dense_output(self, bi_output, mask, name='dense_output'):
+        forward = bi_output[0]
+        backward = bi_output[1]
+        output = tf.concat([forward, backward], -1) * tf.expand_dims(mask, -1)
+        state = tf.reduce_sum(output, 1)
+        return tf.nn.l2_normalize(tf.layers.dense(state, config.dense_vector_dim), name=name)
+        
 
     def restore(self, sess):
         ckpt = tf.train.get_checkpoint_state(self.ckpt_folder)
