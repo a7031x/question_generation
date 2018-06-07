@@ -77,7 +77,8 @@ class Model(object):
                 config.num_passage_encoder_layers,
                 config.num_passage_residual_layers)
             self.passage_encoder_output = tf.concat(bi_output, -1, name='output')
-            self.passage_encoder_state = self.dense_output(bi_output, self.passage_mask)
+        #    self.passage_encoder_state = self.dense_output(bi_output, self.passage_mask)
+            self.passage_encoder_state = self.dense_state(bi_state)
             tf.summary.histogram('passage_encoder/output', self.passage_encoder_output)
             tf.summary.histogram('passage_encoder/state', self.passage_encoder_state)
 
@@ -91,7 +92,8 @@ class Model(object):
                 config.num_question_encoder_layers,
                 config.num_question_residual_layers)
             self.question_encoder_output = tf.concat(bi_output, -1, name='output')
-            self.question_encoder_state = self.dense_output(bi_output, self.question_mask)
+            #self.question_encoder_state = self.dense_output(bi_output, self.question_mask)
+            self.question_encoder_state = self.dense_state(bi_state)
             tf.summary.histogram('question_encoder/output', self.question_encoder_output)
             tf.summary.histogram('question_encoder/state', self.question_encoder_state)
 
