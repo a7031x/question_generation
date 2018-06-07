@@ -205,10 +205,10 @@ def load_qa(filename, answer_limit=0):
     for line in utils.read_all_lines(filename):
         if line == '<P>':
             passage = lines[0].split(' ')
-            if len(''.join(passage)) > config.max_passage_len:
-                continue
-            questions = [q.split(' ') for q in lines[1:] if len(''.join(q)) <= config.max_question_len]
-            r.append((passage, questions))
+            if len(''.join(passage)) <= config.max_passage_len:
+                questions = [q.split(' ') for q in lines[1:] if len(q.replace(' ', '')) <= config.max_question_len]
+                if questions:
+                    r.append((passage, questions))
             lines.clear()
         else:
             lines.append(line)
