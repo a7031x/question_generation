@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import rnn_helper as rnn
+import cnn_helper as cnn
 import config
 import func
 import utils
@@ -69,33 +70,63 @@ class Model(object):
 
 
     def create_passage_encoder(self):
-        with tf.variable_scope('passage_encoder'):
-            bi_output, bi_state = self.multi_bilstm(
+        if config.using_cnn:
+            self.passage_encoder_state = self.conv_encoder(
+                self.passage_embedding,
+                self.passage_length,                
+                config.num_passage_encoder_layers,
+                'passage_encoder')
+        else:
+            self.passage_encoder_state = self.nlstm_encoder(
                 self.passage_embedding,
                 self.passage_length,
-                config.encoder_hidden_dim,
                 config.num_passage_encoder_layers,
-                config.num_passage_residual_layers)
-            self.passage_encoder_output = tf.concat(bi_output, -1, name='output')
-        #    self.passage_encoder_state = self.dense_output(bi_output, self.passage_mask)
-            self.passage_encoder_state = self.dense_state(bi_state)
-            tf.summary.histogram('passage_encoder/output', self.passage_encoder_output)
-            tf.summary.histogram('passage_encoder/state', self.passage_encoder_state)
+                config.num_passage_residual_layers,
+                'passage_encoder')
 
 
     def create_question_encoder(self):
-        with tf.variable_scope('question_encoder'):
-            bi_output, bi_state = self.multi_bilstm(
+        if config.using_cnn:
+            self.question_encoder_state = self.conv_encoder(
                 self.question_embedding,
                 self.question_length,
-                config.encoder_hidden_dim,
                 config.num_question_encoder_layers,
-                config.num_question_residual_layers)
-            self.question_encoder_output = tf.concat(bi_output, -1, name='output')
-            #self.question_encoder_state = self.dense_output(bi_output, self.question_mask)
-            self.question_encoder_state = self.dense_state(bi_state)
-            tf.summary.histogram('question_encoder/output', self.question_encoder_output)
-            tf.summary.histogram('question_encoder/state', self.question_encoder_state)
+                'question_encoder')
+        else:
+            self.question_encoder_state = self.nlstm_encoder(
+                self.question_embedding,
+                self.question_length,
+                config.num_question_encoder_layers,
+                config.num_question_residual_layers,
+                'question_encoder')
+
+
+    def conv_encoder(self, inputs, length, num_layers, scope):
+        outputs = cnn.conv(inputs, num_layers, config.encoder_kernel_size, config.encoder_hidden_dim, self.input_keep_prob, scope)
+        return self.self_attention(outputs, length, scope)
+
+
+    def nlstm_encoder(self, inputs, length, num_encoder_layers, num_residual_layers, scope):
+        with tf.variable_scope(scope):
+            _, bi_state = self.multi_bilstm(
+                inputs, length, config.encoder_hidden_dim,
+                num_encoder_layers, num_residual_layers)
+            #encoder_output = tf.concat(bi_output, -1, name='output')
+            #encoder_state = self.dense_output(bi_output, self.question_mask)
+            encoder_state = self.dense_state(bi_state)
+            tf.summary.histogram('{}/state'.format(scope), encoder_state)
+            return encoder_state
+
+
+    def self_attention(self, inputs, length, scope):
+        with tf.variable_scope(scope):
+            mask = tf.sequence_mask(length, dtype=tf.float32)
+            self_att, _ = func.dot_attention(inputs, inputs, mask, config.encoder_hidden_dim, self.input_keep_prob)
+            self_match, _ = func.rnn('gru', self_att, length, config.encoder_hidden_dim, 1, self.input_keep_prob)
+            ws_answer = tf.get_variable(name='ws_answer', shape=[config.encoder_hidden_dim, 1])
+            logit = tf.einsum('aij,jk->aik', self_match, ws_answer)
+            alpha = tf.sigmoid(logit, name='alpha')
+            return tf.reduce_sum(alpha*inputs, 1, name='dense_vector')
 
 
     def create_similarity(self):
@@ -103,7 +134,6 @@ class Model(object):
             tiled_passage = tf.tile(self.passage_encoder_state, [self.max_num_question, 1])
             self.similarity = tf.reduce_sum(self.question_encoder_state * tiled_passage, -1, name='similarity')
             self.norm_similarity = tf.sigmoid(self.similarity)
-            #self.similarity = tf.clip_by_value(self.similarity, -20, 20, name='similarity')
 
 
     def create_loss(self):
@@ -180,4 +210,4 @@ class Model(object):
 
 
 if __name__ == '__main__':
-    model = Model(config.char_vocab_size)
+    model = Model(13000)
