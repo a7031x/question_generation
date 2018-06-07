@@ -31,7 +31,8 @@ def run_epoch(itr, sess, model, feeder, evaluator, writer):
         questions = [feeder.ids_to_sent(q) for q in qid]
         print(passage)
         for q,s,l in zip(questions, sim, lab):
-            print(' {} {:>.2F}: {}'.format(l, s, q))
+            if q:
+                print(' {} {:>.2F}: {}'.format(l, s, q))
         print('-----ITERATION {}, {}/{}, loss: {:>.4F}'.format(itr, feeder.cursor, feeder.size, loss))
         nbatch += 1
         if nbatch % 10 == 0:

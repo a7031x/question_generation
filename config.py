@@ -8,6 +8,7 @@ num_question_encoder_layers = 2
 num_question_residual_layers = 1
 decoder_hidden_dim = 128
 dense_vector_dim = 1024
+max_passage_len = 400
 max_question_len = 50
 batch_size=32
 NULL = '<NULL>'
