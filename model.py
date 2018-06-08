@@ -102,8 +102,11 @@ class Model(object):
 
 
     def conv_encoder(self, inputs, length, num_layers, scope):
-        outputs = cnn.conv(inputs, num_layers, config.encoder_kernel_size, config.encoder_hidden_dim, self.input_keep_prob, scope)
-        return self.self_attention(outputs, length, scope)
+        mask = tf.expand_dims(tf.sequence_mask(length, dtype=tf.float32), -1)
+        outputs = cnn.conv(inputs*mask, num_layers, config.encoder_kernel_size, config.encoder_hidden_dim*4, self.input_keep_prob, scope+'.output')
+        gate = tf.sigmoid(cnn.conv(inputs*mask, num_layers, config.encoder_kernel_size, config.encoder_hidden_dim*4, self.input_keep_prob, scope+'.gate'))
+        #return self.self_attention(outputs * gate, length, scope)
+        return outputs * gate
 
 
     def nlstm_encoder(self, inputs, length, num_encoder_layers, num_residual_layers, scope):
