@@ -151,7 +151,7 @@ class Model(object):
 
     def create_optimizer(self):
         self.global_step = tf.Variable(0, trainable=False)
-        self.opt = tf.train.AdamOptimizer(learning_rate=1E-3)
+        self.opt = tf.train.AdamOptimizer(learning_rate=1E-4)
         grads = self.opt.compute_gradients(self.loss)
         gradients, variables = zip(*grads)
         capped_grads, _ = tf.clip_by_global_norm(gradients, 5.0)
