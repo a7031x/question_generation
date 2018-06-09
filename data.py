@@ -37,19 +37,16 @@ class Feeder(object):
         return ''.join([self.dataset.i2c[id] for id in ids if id != config.NULL_ID])
 
 
-    def label_qa(self, sent):
-        qv = [0] * len(self.dataset.qw2i)
-        av = [0] * len(self.dataset.aw2i)
-        for word in sent:
-            if word in self.dataset.qw2i:
-                qv[self.dataset.qw2i[word]] = 1
-            if word in self.dataset.aw2i:
-                av[self.dataset.aw2i[word]] = 1
-        return qv, av
+    def label_vector(self, sent):
+        v = [0] * len(self.dataset.c2i)
+        for char in sent:
+            if char in self.dataset.c2i:
+                v[self.dataset.c2i[char]] = 1
+        return v
 
 
     def seq_tag(self, question, answer):
-        return [1 if word in question else 0 for word in answer]
+        return [1 if char in question else 0 for char in answer]
 
 
     def decode_logit(self, logit):
@@ -167,6 +164,8 @@ class TrainFeeder(Feeder):
             passage, questions = ''.join(passage), [''.join(q) for q in questions]
             pids = self.sent_to_ids(passage)
             qids = [self.sent_to_ids(question) for question in questions]
+            #question_vector = self.label_vector(questions[0])
+            #passage_tag = [self.seq_tag(q, p) for p,q in zip()]
             batch_pid.append(pids)
             batch_qid.append(qids)
             batch_label.append(labels)

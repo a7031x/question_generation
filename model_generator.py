@@ -9,18 +9,18 @@ import config
 import os
 
 class Model(object):
-    def __init__(self, word_weight, embedding, initializer, ckpt_folder, train_mode=True, name='generator'):
+    def __init__(self, ci2n, embedding, initializer, name='generator'):
         self.name = name
-        self.train_mode = train_mode
-        self.vocab_size = len(word_weight)
+        self.vocab_size = len(ci2n)
         qww = [0] * self.vocab_size
-        pmax = word_weight[80]
-        for i,c in word_weight.items():
-            qww[i] = min(c, pmax)
+        for i,c in ci2n.items():
+            qww[i] = c
+        qwm = qww[80]
+        qww = [c if c < qwm else qwm for c in qww]
         qww = np.array(qww) ** 0.5
         self.word_weight = 5 - 4.7 * qww / np.max(qww)
         self.embedding = embedding
-        print(self.word_weight[:50])
+        print(self.word_weight[78:100])
         with tf.variable_scope(self.name, initializer=initializer):
             self.initialize()
 
@@ -31,11 +31,7 @@ class Model(object):
         self.create_encoder()
         self.create_selfmatch()
         self.create_decoder()
-        if self.train_mode:
-            self.create_loss()
-            self.create_optimizer()
-        self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=2)
-        total, vc = self.number_parameters()
+        total, vc = self.trainable_parameters()
         print('trainable parameters: {}'.format(total))
         for name, count in vc.items():
             print('{}: {}'.format(name, count))
@@ -48,11 +44,7 @@ class Model(object):
             self.batch_size = tf.shape(self.input_word)[0]
             self.mask, self.length = func.tensor_to_mask(self.input_word)
             self.input_label_answer = tf.placeholder(tf.float32, shape=[None, None], name='label_answer')
-            self.input_label_question = tf.placeholder(tf.int32, shape=[None, None], name='label_question')
             self.input_label_question_vector = tf.placeholder(tf.float32, shape=[None, self.vocab_size], name='label_question_vector')
-            self.input_target_question = tf.placeholder(tf.int32, shape=[None, None], name='target_question')
-            self.question_mask, self.question_len = func.tensor_to_mask(self.input_target_question)
-            self.max_question_len = tf.reduce_max(self.question_len)
 
 
     def feed(self, aids, qids=None, qv=None, st=None, keep_prob=1.0):
@@ -66,12 +58,6 @@ class Model(object):
             feed_dict[self.input_label_question_vector] = qv
         if st is not None:
             feed_dict[self.input_label_answer] = st
-        if qids is not None:
-            feed_dict[self.input_label_question] = qids
-            tids = [[id for id in x if id != config.NULL_ID] + [config.EOS_ID] for x in qids]
-            mlen = len(qids[0]) + 1
-            tids = [x + [config.NULL_ID] * (mlen-len(x)) for x in tids]
-            feed_dict[self.input_target_question] = tids
         return feed_dict
 
 
@@ -125,11 +111,11 @@ class Model(object):
             cell = rnn.create_rnn_cell('lstm', config.decoder_hidden_dim, config.num_decoder_rnn_layers, config.num_decoder_residual_layers, self.input_keep_prob)
             cell = ts.AttentionWrapper(cell, attention_mechanism,
                 attention_layer_size=config.decoder_hidden_dim,
-                alignment_history=(not self.train_mode) and (config.beam_width == 0),
+                alignment_history=False,
                 output_attention=True,
                 name='attention')
 
-            decoder_initial_state = cell.zero_state(batch_size, tf.float32).clone(cell_state=encoder_state)
+            decoder_initial_state = cell.zero_state(batch_size, tf.float32)
             #start_tokens = tf.fill([self.batch_size], config.SOS_ID)
             #target_input = tf.concat([tf.expand_dims(start_tokens, -1), self.input_label_question], 1)
             vector_input = tf.tile(tf.expand_dims(self.answer_vector, 1), [1, config.max_question_len, 1])
@@ -139,15 +125,6 @@ class Model(object):
             output, self.final_context_state, _ = ts.dynamic_decode(decoder, swap_memory=True, scope=decoder_scope)
             self.question_logit = output_layer(output.rnn_output)
             tf.summary.histogram('decoder/question_logit', self.question_logit)
-
-
-    def create_seq_loss(self):
-        with tf.name_scope('seq_loss'):
-            crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=self.input_target_question, logits=self.question_logit[:,:self.max_question_len,:]) * self.question_mask
-            self.seq_loss = tf.reduce_sum(crossent) / tf.to_float(self.batch_size)
-            tf.summary.scalar('seq_loss', self.seq_loss)
-            return self.seq_loss
 
     
     def create_answer_tag_loss(self):
@@ -160,49 +137,20 @@ class Model(object):
 
     def create_vector_loss(self):
         with tf.name_scope('vector_loss'):
-            mask = tf.expand_dims(self.question_mask, -1)
-            question_logit = self.question_logit[:,:self.max_question_len,:]
-            hardmax = ts.hardmax(question_logit)
-            self.max_logit = hardmax * question_logit * mask
+            hardmax = ts.hardmax(self.question_logit)
+            self.max_logit = hardmax * self.question_logit
             self.squeezed_logit = tf.reduce_sum(self.max_logit, 1)
-            vector_weight = tf.cast(tf.reduce_sum(hardmax, 1) + self.input_label_question_vector > 0.0, tf.float32) * self.question_word_weight
-            vector_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.input_label_question_vector, logits=self.squeezed_logit) * vector_weight
+            vector_weight = tf.cast(tf.reduce_sum(hardmax, 1) + self.input_label_question_vector > 0.0, tf.float32) * self.word_weight
+            vector_loss = tf.nn.weighted_cross_entropy_with_logits(targets=self.input_label_question_vector, logits=self.squeezed_logit, pos_weight=3.0) * vector_weight
             self.vector_loss = tf.reduce_mean(tf.reduce_sum(vector_loss, -1))
             tf.summary.scalar('vector_loss', self.vector_loss)
             return self.vector_loss
 
 
-    def create_loss(self):
-        self.create_answer_tag_loss()
-        self.create_vector_loss()
-        self.create_seq_loss()
-        with tf.name_scope('loss'):
-            self.loss = self.vector_loss + self.seq_loss + self.answer_tag_loss
-            tf.summary.scalar('loss', self.loss)
-
-
-    def create_optimizer(self):
-        self.global_step = tf.Variable(0, trainable=False)
-        self.opt = tf.train.AdamOptimizer(learning_rate=1E-3)
-        grads = self.opt.compute_gradients(self.loss)
-        gradients, variables = zip(*grads)
-        capped_grads, _ = tf.clip_by_global_norm(gradients, 5.0)
-        self.optimizer = self.opt.apply_gradients(zip(capped_grads, variables), global_step=self.global_step)
-
-
-    def save(self, sess):
-        self.saver.save(sess, os.path.join(self.ckpt_folder, 'model.ckpt'))
-
-
-    def summarize(self, writer):
-        self.summary = tf.summary.merge_all()
-
-
-    def number_parameters(self):
+    def trainable_parameters(self):
         total_parameters = 0
         vc = {}
-        for variable in tf.trainable_variables():
-            # shape is an array of tf.Dimension
+        for variable in tf.trainable_variables(self.name):
             shape = variable.get_shape()
             variable_parameters = 1
             for dim in shape:
@@ -215,4 +163,5 @@ class Model(object):
 if __name__ == '__main__':
     from data import Dataset
     data = Dataset()
-    model = Model(data.qi2c, None)
+    embedding = tf.get_variable(name='embedding', shape=[len(data.ci2n), config.embedding_dim])
+    model = Model(data.ci2n, embedding, tf.random_normal_initializer())

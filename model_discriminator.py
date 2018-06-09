@@ -12,10 +12,8 @@ class Model(object):
         self.name = name
         self.ckpt_folder = ckpt_folder
         self.vocab_size = vocab_size
-        if self.ckpt_folder is not None:
-            utils.mkdir(self.ckpt_folder)
-        initializer = tf.random_uniform_initializer(-0.05, 0.05)
-        with tf.variable_scope(self.name, initializer=initializer):
+        self.initializer = tf.random_uniform_initializer(-0.05, 0.05)
+        with tf.variable_scope(self.name, initializer=self.initializer):
             self.initialize()
 
 
@@ -26,22 +24,10 @@ class Model(object):
         self.create_question_encoder()
         self.create_similarity()
         self.create_loss()
-        self.create_optimizer()
-        self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=2)
         total, vc = self.trainable_parameters()
         print('trainable parameters: {}'.format(total))
         for name, count in vc.items():
             print('{}: {}'.format(name, count))
-
-
-    def feed(self, passage, question, label, keep_prob):
-        feed_dict = {
-            self.input_passage: passage,
-            self.input_question: question,
-            self.input_question_label: label,
-            self.input_keep_prob: keep_prob
-        }
-        return feed_dict
 
 
     def create_input(self):
@@ -87,15 +73,18 @@ class Model(object):
 
     def create_question_encoder(self):
         if config.using_cnn:
-            self.question_encoder_state = self.conv_encoder(
-                self.question_embedding,
-                self.question_length,
+            self.question_encoder_state = self.create_question_encoding(self.question_embedding, self.question_length)
+
+
+    def create_question_encoding(self, input, length):
+        if config.using_cnn:
+            return self.conv_encoder(
+                input, length,
                 config.num_question_encoder_layers,
                 'question_encoder')
         else:
-            self.question_encoder_state = self.nlstm_encoder(
-                self.question_embedding,
-                self.question_length,
+            return self.nlstm_encoder(
+                input, length,
                 config.num_question_encoder_layers,
                 config.num_question_residual_layers,
                 'question_encoder')
@@ -147,22 +136,12 @@ class Model(object):
             loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.similarity, labels=self.target_question_label) * target_mask
             self.loss = tf.reduce_sum(loss) / tf.reduce_sum(target_mask)
             tf.summary.scalar('loss/loss', self.loss)
-            
-
-    def create_optimizer(self):
-        self.global_step = tf.Variable(0, trainable=False)
-        self.opt = tf.train.AdamOptimizer(learning_rate=1E-4)
-        grads = self.opt.compute_gradients(self.loss)
-        gradients, variables = zip(*grads)
-        capped_grads, _ = tf.clip_by_global_norm(gradients, 5.0)
-        self.optimizer = self.opt.apply_gradients(zip(capped_grads, variables), global_step=self.global_step)
 
 
     def trainable_parameters(self):
         total_parameters = 0
         vc = {}
-        for variable in tf.trainable_variables():
-            # shape is an array of tf.Dimension
+        for variable in tf.trainable_variables(self.name):
             shape = variable.get_shape()
             variable_parameters = 1
             for dim in shape:
@@ -194,24 +173,6 @@ class Model(object):
         output = tf.concat([forward, backward], -1) * tf.expand_dims(mask, -1)
         state = tf.reduce_sum(output, 1)
         return tf.layers.dense(state, config.dense_vector_dim, name=name)
-        
-
-    def restore(self, sess):
-        ckpt = tf.train.get_checkpoint_state(self.ckpt_folder)
-        if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
-            with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
-                self.saver.restore(sess, ckpt.model_checkpoint_path)
-                print('MODEL LOADED.')
-        else:
-            sess.run(tf.global_variables_initializer())
-
-
-    def save(self, sess):
-        self.saver.save(sess, os.path.join(self.ckpt_folder, 'model.ckpt'))
-
-
-    def summarize(self, writer):
-        self.summary = tf.summary.merge_all()
 
 
 if __name__ == '__main__':

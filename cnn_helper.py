@@ -8,7 +8,7 @@ def layer_dropout(inputs, residual, keep_prob):
 
 
 def conv(inputs, num_layers, kernel_size, filter_size, keep_prob, scope):
-    with tf.variable_scope(scope):
+    with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
         for i in range(num_layers):
             scope = 'layer.{}'.format(i)
             inputs = tf.contrib.layers.layer_norm(inputs)
