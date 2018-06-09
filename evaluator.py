@@ -22,7 +22,6 @@ def sigmoid(x):
 
 
 def evaluate_discriminator(sess, model, feeder, writer, training, with_generator_loss, feed=None):
-    feeder.prepare('dev')
     pids, qids, labels, kb = feeder.next()
     if feed is None:
         feed = model.feed_discriminator(pids, qids, labels, kb)
@@ -56,7 +55,6 @@ def evaluate_discriminator(sess, model, feeder, writer, training, with_generator
 
 
 def evaluate_generator(sess, model, feeder, writer, training, feed=None):
-    feeder.prepare('dev')
     pids, qids, _, kb = feeder.next()
     if feed is None:
         feed = model.feed_generator(pids, kb)
@@ -111,6 +109,7 @@ class Evaluator(TrainFeeder):
             self.prepare('dev')
             pids, qids, labels, kb = self.next()
             self.discriminator_feed = model.feed_discriminator(pids, qids, labels, kb)
+        self.prepare('dev')        
         return evaluate_discriminator(sess, model, self, None, False, True, self.discriminator_feed)
 
 
@@ -119,6 +118,7 @@ class Evaluator(TrainFeeder):
             self.prepare('dev')
             pids, _, _, kb = self.next()
             self.generator_feed = model.feed_generator(pids, kb)
+        self.prepare('dev')        
         return evaluate_generator(sess, model, self, None, False, self.generator_feed)
 
 
