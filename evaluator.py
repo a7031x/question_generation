@@ -23,6 +23,7 @@ def sigmoid(x):
 class Evaluator(TrainFeeder):
     def __init__(self, dataset=None):
         super(Evaluator, self).__init__(Dataset() if dataset is None else dataset)
+        self.evaluate_feed = None
 
 
     def create_feed(self, answer, question):
@@ -50,10 +51,11 @@ class Evaluator(TrainFeeder):
 
 
     def evaluate(self, sess, model):
-        self.prepare('dev')
-        pids, qids, labels, kb = self.next()
-        feed = model.feed(pids, qids, labels, kb)
-        loss = sess.run(model.loss, feed_dict=feed)
+        if self.evaluate_feed is None:
+            self.prepare('dev')
+            pids, qids, labels, kb = self.next()
+            self.evaluate_feed = model.feed(pids, qids, labels, kb)
+        loss = sess.run(model.loss, feed_dict=self.evaluate_feed)
         return loss
 
 

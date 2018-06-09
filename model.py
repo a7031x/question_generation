@@ -103,10 +103,12 @@ class Model(object):
 
     def conv_encoder(self, inputs, length, num_layers, scope):
         mask = tf.expand_dims(tf.sequence_mask(length, dtype=tf.float32), -1)
-        outputs = cnn.conv(inputs*mask, num_layers, config.encoder_kernel_size, config.encoder_hidden_dim*4, self.input_keep_prob, scope+'.output')
-        gate = tf.sigmoid(cnn.conv(inputs*mask, num_layers, config.encoder_kernel_size, config.encoder_hidden_dim*4, self.input_keep_prob, scope+'.gate'))
+        outputs0 = cnn.conv(inputs*mask, num_layers, config.encoder_kernel_size0, config.dense_vector_dim//2, self.input_keep_prob, scope+'.output0')
+        outputs1 = cnn.conv(inputs*mask, num_layers, config.encoder_kernel_size1, config.dense_vector_dim//2, self.input_keep_prob, scope+'.output1')
+        outputs = tf.concat([outputs0, outputs1], -1)
+        gate = tf.sigmoid(cnn.conv(inputs*mask, num_layers, config.encoder_gate_size, config.dense_vector_dim, self.input_keep_prob, scope+'.gate'))
         #return self.self_attention(outputs * gate, length, scope)
-        return outputs * gate
+        return tf.reduce_sum(outputs*gate, 1)
 
 
     def nlstm_encoder(self, inputs, length, num_encoder_layers, num_residual_layers, scope):

@@ -13,7 +13,10 @@ def conv(inputs, num_layers, kernel_size, filter_size, keep_prob, scope):
             scope = 'layer.{}'.format(i)
             inputs = tf.contrib.layers.layer_norm(inputs)
             outputs = depthwise_separable_convolution(inputs, kernel_size, filter_size, scope)
-            inputs = layer_dropout(outputs, inputs, keep_prob)
+            if i > 0:
+                inputs = layer_dropout(outputs, inputs, keep_prob)
+            else:
+                inputs = outputs
         return outputs
 
 
