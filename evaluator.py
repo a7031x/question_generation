@@ -26,14 +26,17 @@ def evaluate_discriminator(sess, model, feeder, writer, training, with_generator
     pids, qids, labels, kb = feeder.next()
     if feed is None:
         feed = model.feed_discriminator(pids, qids, labels, kb)
+    loss = model.discriminator_loss if with_generator_loss else model.discriminator_loss0
     if training:
         optimizer = model.discriminator_optimizer if with_generator_loss else model.discriminator_optimizer0
+        if not with_generator_loss:
+            feed = feed.copy()
+            del feed[model.generator.input_word]
     else:
         optimizer = tf.no_op()
     summary, global_step, _, loss, similarity, question_logit = sess.run(
         [
-            model.summary, model.global_step, optimizer,
-            model.discriminator_loss if with_generator_loss else model.discriminator_loss0,
+            model.summary, model.global_step, optimizer, loss,
             model.discriminator.norm_similarity,
             model.generator.question_logit if with_generator_loss else tf.no_op()
         ], feed_dict=feed)

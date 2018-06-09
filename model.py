@@ -39,8 +39,8 @@ class Model(object):
             self.generator.input_word: passage,
             #self.generator.input_label_question_vector: question_vector,
             #self.generator.input_label_answer: answer_tag,
-            self.discriminator.input_question: [[[0]]],            
-            self.discriminator.input_question_label: [[1]],            
+            self.discriminator.input_question: [[[0]]],
+            self.discriminator.input_question_label: [[1]],
             self.generator.input_keep_prob: keep_prob
         }
         return feed_dict
