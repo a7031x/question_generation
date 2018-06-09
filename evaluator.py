@@ -31,7 +31,7 @@ def evaluate_discriminator(sess, model, feeder, writer, training, with_generator
         optimizer = model.discriminator_optimizer if with_generator_loss else model.discriminator_optimizer0
         if not with_generator_loss:
             feed = feed.copy()
-            del feed[model.generator.input_word]
+            #del feed[model.generator.input_word]
     else:
         optimizer = tf.no_op()
     summary, global_step, _, loss, similarity, question_logit = sess.run(
