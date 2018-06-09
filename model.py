@@ -14,7 +14,8 @@ class Model(object):
         self.ckpt_folder = ckpt_folder
         if self.ckpt_folder is not None:
             utils.mkdir(self.ckpt_folder)
-        self.discriminator_optimizer, self.discriminator_loss = self.create_discriminator_optimizer()
+        self.discriminator_optimizer, self.discriminator_loss = self.create_discriminator_optimizer(True)
+        self.discriminator_optimizer0, self.discriminator_loss0 = self.create_discriminator_optimizer(False)
         self.generator_optimizer, self.generator_loss = self.create_generator_optimizer()
         self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=2)
 
@@ -59,11 +60,13 @@ class Model(object):
         return tf.reduce_sum(loss)
 
 
-    def create_discriminator_optimizer(self):
-        generator_loss = self.create_generator_loss(0)
+    def create_discriminator_optimizer(self, with_generator_loss):
         discriminator_loss = self.discriminator.loss
-        loss = generator_loss + discriminator_loss
-        tf.summary.scalar('discriminator/generator/loss', generator_loss)
+        loss = discriminator_loss
+        if with_generator_loss:
+            generator_loss = self.create_generator_loss(0)
+            loss += generator_loss
+            tf.summary.scalar('discriminator/generator/loss', generator_loss)
         tf.summary.scalar('discriminator/discriminator/loss', discriminator_loss)
         tf.summary.scalar('discriminator/loss', loss)
         return self.create_optimizer(loss, self.discriminator.name), loss

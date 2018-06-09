@@ -21,13 +21,19 @@ def sigmoid(x):
   return 1 / (1 + np.exp(-x))
 
 
-def evaluate_discriminator(sess, model, feeder, writer, training, feed=None):
+def evaluate_discriminator(sess, model, feeder, writer, training, with_generator_loss, feed=None):
+    feeder.prepare('dev')
     pids, qids, labels, kb = feeder.next()
     if feed is None:
         feed = model.feed_discriminator(pids, qids, labels, kb)
+    if training:
+        optimizer = model.discriminator_optimizer if with_generator_loss else model.discriminator_optimizer0
+    else:
+        optimizer = tf.no_op()
     summary, global_step, _, loss, similarity, question_logit = sess.run(
         [
-            model.summary, model.global_step, model.discriminator_optimizer if training else tf.no_op(), model.discriminator_loss,
+            model.summary, model.global_step, optimizer,
+            model.discriminator_loss if with_generator_loss else model.discriminator_loss0,
             model.discriminator.norm_similarity, model.generator.question_logit
         ], feed_dict=feed)
     if writer is not None:
@@ -45,6 +51,7 @@ def evaluate_discriminator(sess, model, feeder, writer, training, feed=None):
 
 
 def evaluate_generator(sess, model, feeder, writer, training, feed=None):
+    feeder.prepare('dev')
     pids, qids, _, kb = feeder.next()
     if feed is None:
         feed = model.feed_generator(pids, kb)
@@ -55,7 +62,7 @@ def evaluate_generator(sess, model, feeder, writer, training, feed=None):
         ], feed_dict=feed)
     if writer is not None:
         writer.add_summary(summary, global_step=global_step)
-    for pid,qid,logit,sim in zip(pids, qids[:][0], question_logit, similarity):
+    for pid,qid,logit,sim in zip(pids, [q[0] for q in qids[:]], question_logit, similarity):
         passage = feeder.ids_to_sent(pid)
         question = feeder.ids_to_sent(qid)
         print(passage)
@@ -95,16 +102,16 @@ class Evaluator(TrainFeeder):
 
 
     def evaluate_discriminator(self, sess, model):
-        self.prepare('dev')
         if self.discriminator_feed is None:
+            self.prepare('dev')
             pids, qids, labels, kb = self.next()
             self.discriminator_feed = model.feed_discriminator(pids, qids, labels, kb)
-        return evaluate_discriminator(sess, model, self, None, False, self.discriminator_feed)
+        return evaluate_discriminator(sess, model, self, None, False, True, self.discriminator_feed)
 
 
     def evaluate_generator(self, sess, model):
-        self.prepare('dev')
         if self.generator_feed is None:
+            self.prepare('dev')
             pids, _, _, kb = self.next()
             self.generator_feed = model.feed_generator(pids, kb)
         return evaluate_generator(sess, model, self, None, False, self.generator_feed)

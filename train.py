@@ -18,7 +18,7 @@ def run_discriminator_epoch(itr, sess, model, feeder, evaluator, writer):
     feeder.prepare('train')
     nbatch = 0
     while not feeder.eof():
-        loss = evaluate_discriminator(sess, model, feeder, writer, True)
+        loss = evaluate_discriminator(sess, model, feeder, writer, itr > 10, True)
         print('-----ITERATION {}, {}/{}, loss: {:>.4F}'.format(itr, feeder.cursor, feeder.size, loss))
         nbatch += 1
         if nbatch % 10 == 0:
@@ -71,7 +71,7 @@ def train(auto_stop):
         while True:
             itr += 1
             run_discriminator_epoch(itr, sess, model, feeder, evaluator, writer)
-            #run_generator_epoch(itr, sess, model, feeder, evaluator, writer)
+            run_generator_epoch(itr, sess, model, feeder, evaluator, writer)
 
 
 train(False)
