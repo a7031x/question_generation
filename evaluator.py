@@ -34,7 +34,8 @@ def evaluate_discriminator(sess, model, feeder, writer, training, with_generator
         [
             model.summary, model.global_step, optimizer,
             model.discriminator_loss if with_generator_loss else model.discriminator_loss0,
-            model.discriminator.norm_similarity, model.generator.question_logit
+            model.discriminator.norm_similarity,
+            model.generator.question_logit if with_generator_loss else tf.no_op()
         ], feed_dict=feed)
     if writer is not None:
         writer.add_summary(summary, global_step=global_step)
@@ -45,8 +46,9 @@ def evaluate_discriminator(sess, model, feeder, writer, training, with_generator
     for q,s,l in zip(questions, sim, lab):
         if q:
             print(' {} {:>.4F}: {}'.format(l, s, q))
-    generated_question = feeder.decode_logit(question_logit[0])
-    print('generate: {}'.format(generated_question))
+    if with_generator_loss:
+        generated_question = feeder.decode_logit(question_logit[0])
+        print('generate: {}'.format(generated_question))
     return loss
 
 
@@ -121,7 +123,7 @@ if __name__ == '__main__':
     from model import Model
     import tensorflow as tf
     evaluator = Evaluator()
-    model = Model(evaluator.dataset.qi2c, config.checkpoint_folder, False)
+    model = Model(evaluator.dataset.ci2n, config.checkpoint_folder, False)
     with tf.Session() as sess:
         model.restore(sess)
         evaluator.prepare('dev')
