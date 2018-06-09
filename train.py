@@ -70,8 +70,8 @@ def train(auto_stop):
         print('start training...')
         while True:
             itr += 1
-            #run_discriminator_epoch(itr, sess, model, feeder, evaluator, writer)
-            run_generator_epoch(itr, sess, model, feeder, evaluator, writer)
+            run_discriminator_epoch(itr, sess, model, feeder, evaluator, writer)
+            #run_generator_epoch(itr, sess, model, feeder, evaluator, writer)
 
 
 train(False)
