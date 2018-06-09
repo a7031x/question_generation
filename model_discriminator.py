@@ -8,7 +8,7 @@ import utils
 import os
 
 class Model(object):
-    def __init__(self, vocab_size, ckpt_folder=None, name='model'):
+    def __init__(self, vocab_size, ckpt_folder=None, name='discriminator'):
         self.name = name
         self.ckpt_folder = ckpt_folder
         self.vocab_size = vocab_size
