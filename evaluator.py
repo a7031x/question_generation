@@ -126,7 +126,7 @@ if __name__ == '__main__':
     from model import Model
     import tensorflow as tf
     evaluator = Evaluator()
-    model = Model(evaluator.dataset.ci2n, config.checkpoint_folder, False)
+    model = Model(evaluator.dataset.ci2n, config.checkpoint_folder)
     with tf.Session() as sess:
         model.restore(sess)
         evaluator.prepare('dev')
